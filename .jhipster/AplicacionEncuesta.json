@@ -1,0 +1,38 @@
+{
+  "annotations": {
+    "changelogDate": "20251119154954"
+  },
+  "applications": ["Auditoria"],
+  "fields": [
+    {
+      "fieldName": "enlaceUnico",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "fechaAplicacion",
+      "fieldType": "LocalDate"
+    },
+    {
+      "fieldName": "respuestaEncuesta",
+      "fieldType": "TextBlob"
+    }
+  ],
+  "name": "AplicacionEncuesta",
+  "pagination": "pagination",
+  "relationships": [
+    {
+      "otherEntityName": "encuestado",
+      "relationshipName": "encuestado",
+      "relationshipSide": "right",
+      "relationshipType": "many-to-one"
+    },
+    {
+      "otherEntityName": "encuesta",
+      "relationshipName": "encuesta",
+      "relationshipSide": "right",
+      "relationshipType": "many-to-one"
+    }
+  ],
+  "searchEngine": "no",
+  "service": "serviceImpl"
+}

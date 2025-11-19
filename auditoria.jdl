@@ -1,0 +1,49 @@
+
+application {
+  config {
+    applicationType monolith
+    baseName Auditoria
+    packageName mx.com.ado.auditoria
+    authenticationType session
+    buildTool maven
+    prodDatabaseType oracle
+    devDatabaseType oracle
+    enableHibernateCache true
+    cacheProvider ehcache
+    dtoSuffix DTO
+    clientFramework react
+    clientTheme jhipster
+    enableTranslation false
+  }
+  entities *
+}
+
+entity Encuestado {
+    nombre String
+    fechaNacimiento LocalDate
+    claveEmpleado String
+}
+
+entity Encuesta {
+    nombre String
+    vigenciaDesde LocalDate
+    vigenciaHasta LocalDate
+    structuraJson TextBlob
+}
+
+entity AplicacionEncuesta {
+    enlaceUnico String
+    fechaAplicacion LocalDate
+    respuestaEncuesta TextBlob
+}
+
+relationship OneToMany {
+	Encuestado to AplicacionEncuesta{encuestado}
+    Encuesta to AplicacionEncuesta{encuesta}
+}
+
+
+paginate Encuestado, Encuesta, AplicacionEncuesta with pagination
+
+service all with serviceImpl
+

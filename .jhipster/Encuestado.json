@@ -1,0 +1,33 @@
+{
+  "annotations": {
+    "changelogDate": "20251119154952"
+  },
+  "applications": ["Auditoria"],
+  "fields": [
+    {
+      "fieldName": "nombre",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "fechaNacimiento",
+      "fieldType": "LocalDate"
+    },
+    {
+      "fieldName": "claveEmpleado",
+      "fieldType": "String"
+    }
+  ],
+  "name": "Encuestado",
+  "pagination": "pagination",
+  "relationships": [
+    {
+      "otherEntityName": "aplicacionEncuesta",
+      "otherEntityRelationshipName": "encuestado",
+      "relationshipName": "aplicacionEncuesta",
+      "relationshipSide": "left",
+      "relationshipType": "one-to-many"
+    }
+  ],
+  "searchEngine": "no",
+  "service": "serviceImpl"
+}
