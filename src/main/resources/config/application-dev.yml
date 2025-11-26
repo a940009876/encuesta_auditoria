@@ -100,4 +100,9 @@ jhipster:
 # https://www.jhipster.tech/common-application-properties/
 # ===================================================================
 
-# application:
+application:
+  encryption:
+    # IMPORTANTE: Cambiar esta clave en producción por una clave segura y única
+    # Debe tener al menos 16 caracteres para garantizar seguridad
+    # openssl rand -base64 32
+    secret-key: ${ENCRYPTION_SECRET_KEY:PRpWzroTvUfz1zEkMtsJdH6scyo+N4iKFlwc6Qh0a9c=}

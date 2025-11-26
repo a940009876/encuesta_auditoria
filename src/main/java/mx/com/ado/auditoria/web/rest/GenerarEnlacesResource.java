@@ -9,6 +9,7 @@ import mx.com.ado.auditoria.domain.Encuestado;
 import mx.com.ado.auditoria.security.AuthoritiesConstants;
 import mx.com.ado.auditoria.service.AplicacionEncuestaService;
 import mx.com.ado.auditoria.service.EncuestaService;
+import mx.com.ado.auditoria.service.EncryptionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,15 +34,18 @@ public class GenerarEnlacesResource {
     private final EncuestaService encuestaService;
     private final AplicacionEncuestaService aplicacionEncuestaService;
     private final ObjectMapper objectMapper;
+    private final EncryptionService encryptionService;
 
     public GenerarEnlacesResource(
         EncuestaService encuestaService,
         AplicacionEncuestaService aplicacionEncuestaService,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        EncryptionService encryptionService
     ) {
         this.encuestaService = encuestaService;
         this.aplicacionEncuestaService = aplicacionEncuestaService;
         this.objectMapper = objectMapper;
+        this.encryptionService = encryptionService;
     }
 
     /**
@@ -132,10 +136,14 @@ public class GenerarEnlacesResource {
                 csvWriter.append(nombreEncuestado).append(",").append(claveEmpleado);
 
                 // Parse responses
-                String respuestaJson = aplicacion.getRespuestaEncuesta();
+                String respuestaJsonEncriptada = aplicacion.getRespuestaEncuesta();
                 Map<Integer, Map<String, Object>> respuestasMap = new HashMap<>();
-                if (respuestaJson != null && !respuestaJson.trim().isEmpty()) {
+                if (respuestaJsonEncriptada != null && !respuestaJsonEncriptada.trim().isEmpty()) {
                     try {
+                        // Desencriptar las respuestas antes de parsearlas
+                        String respuestaJson = encryptionService.decrypt(respuestaJsonEncriptada);
+                        LOG.debug("Respuestas desencriptadas exitosamente para aplicacionEncuesta ID: {}", aplicacion.getId());
+
                         @SuppressWarnings("unchecked")
                         Map<String, Object> respuestasData = (Map<String, Object>) objectMapper.readValue(respuestaJson, Map.class);
                         @SuppressWarnings("unchecked")
@@ -147,7 +155,7 @@ public class GenerarEnlacesResource {
                             }
                         }
                     } catch (Exception e) {
-                        LOG.warn("Error parsing respuesta JSON for aplicacion {}: {}", aplicacion.getId(), e.getMessage());
+                        LOG.warn("Error parsing or decrypting respuesta JSON for aplicacion {}: {}", aplicacion.getId(), e.getMessage());
                     }
                 }
 

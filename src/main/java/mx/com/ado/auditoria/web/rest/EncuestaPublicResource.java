@@ -9,6 +9,7 @@ import mx.com.ado.auditoria.domain.Encuestado;
 import mx.com.ado.auditoria.repository.EncuestadoRepository;
 import mx.com.ado.auditoria.service.AplicacionEncuestaService;
 import mx.com.ado.auditoria.service.EncuestaService;
+import mx.com.ado.auditoria.service.EncryptionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -28,17 +29,20 @@ public class EncuestaPublicResource {
     private final ObjectMapper objectMapper;
     private final EncuestaService encuestaService;
     private final EncuestadoRepository encuestadoRepository;
+    private final EncryptionService encryptionService;
 
     public EncuestaPublicResource(
         AplicacionEncuestaService aplicacionEncuestaService,
         ObjectMapper objectMapper,
         EncuestaService encuestaService,
-        EncuestadoRepository encuestadoRepository
+        EncuestadoRepository encuestadoRepository,
+        EncryptionService encryptionService
     ) {
         this.aplicacionEncuestaService = aplicacionEncuestaService;
         this.objectMapper = objectMapper;
         this.encuestaService = encuestaService;
         this.encuestadoRepository = encuestadoRepository;
+        this.encryptionService = encryptionService;
     }
 
     /**
@@ -414,8 +418,12 @@ public class EncuestaPublicResource {
             // Convertir respuestas a JSON string
             String respuestaEncuestaJson = objectMapper.writeValueAsString(respuestas);
 
+            // Encriptar las respuestas antes de guardarlas
+            String respuestaEncuestaEncriptada = encryptionService.encrypt(respuestaEncuestaJson);
+            LOG.debug("Respuestas encriptadas exitosamente para aplicacionEncuesta ID: {}", aplicacionEncuesta.getId());
+
             // Actualizar la aplicacionEncuesta
-            aplicacionEncuesta.setRespuestaEncuesta(respuestaEncuestaJson);
+            aplicacionEncuesta.setRespuestaEncuesta(respuestaEncuestaEncriptada);
             aplicacionEncuesta.setFechaAplicacion(LocalDate.now());
 
             aplicacionEncuestaService.update(aplicacionEncuesta);

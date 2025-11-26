@@ -218,4 +218,9 @@ jhipster:
 # https://www.jhipster.tech/common-application-properties/
 # ===================================================================
 
-# application:
+application:
+  encryption:
+    # IMPORTANTE: Cambiar esta clave en producción por una clave segura y única
+    # Debe tener al menos 16 caracteres para garantizar seguridad
+    # Se puede sobrescribir con variable de entorno ENCRYPTION_SECRET_KEY
+    secret-key: ${ENCRYPTION_SECRET_KEY:auditoria-encuesta-secret-key-2025-change-in-production}
