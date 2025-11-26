@@ -16,6 +16,7 @@ import ErrorBoundaryRoutes from 'app/shared/error/error-boundary-routes';
 import PageNotFound from 'app/shared/error/page-not-found';
 import { AUTHORITIES } from 'app/config/constants';
 import EncuestaPublic from 'app/modules/encuesta-public/encuesta-public';
+import EncuestaInit from 'app/modules/encuesta-init/encuesta-init';
 
 const loading = <div>loading ...</div>;
 
@@ -35,6 +36,7 @@ const AppRoutes = () => {
         <Route index element={<Home />} />
         <Route path="login" element={<Login />} />
         <Route path="logout" element={<Logout />} />
+        <Route path="encuesta/init" element={<EncuestaInit />} />
         <Route path="encuesta/:enlaceUnico" element={<EncuestaPublic />} />
         <Route path="account">
           <Route

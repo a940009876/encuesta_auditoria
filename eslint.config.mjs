@@ -95,4 +95,10 @@ export default tseslint.config(
   },
   // jhipster-needle-eslint-add-config - JHipster will add additional config here
   prettier,
+  {
+    rules: {
+      // Permitir CRLF o LF según el sistema para evitar errores masivos de fin de línea con prettier
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
+    },
+  },
 );

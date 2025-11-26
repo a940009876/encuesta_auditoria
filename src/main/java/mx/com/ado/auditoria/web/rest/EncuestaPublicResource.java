@@ -2,13 +2,13 @@ package mx.com.ado.auditoria.web.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import mx.com.ado.auditoria.domain.AplicacionEncuesta;
 import mx.com.ado.auditoria.domain.Encuesta;
 import mx.com.ado.auditoria.domain.Encuestado;
+import mx.com.ado.auditoria.repository.EncuestadoRepository;
 import mx.com.ado.auditoria.service.AplicacionEncuestaService;
+import mx.com.ado.auditoria.service.EncuestaService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -26,10 +26,19 @@ public class EncuestaPublicResource {
 
     private final AplicacionEncuestaService aplicacionEncuestaService;
     private final ObjectMapper objectMapper;
+    private final EncuestaService encuestaService;
+    private final EncuestadoRepository encuestadoRepository;
 
-    public EncuestaPublicResource(AplicacionEncuestaService aplicacionEncuestaService, ObjectMapper objectMapper) {
+    public EncuestaPublicResource(
+        AplicacionEncuestaService aplicacionEncuestaService,
+        ObjectMapper objectMapper,
+        EncuestaService encuestaService,
+        EncuestadoRepository encuestadoRepository
+    ) {
         this.aplicacionEncuestaService = aplicacionEncuestaService;
         this.objectMapper = objectMapper;
+        this.encuestaService = encuestaService;
+        this.encuestadoRepository = encuestadoRepository;
     }
 
     /**
@@ -121,6 +130,256 @@ public class EncuestaPublicResource {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", "Error inesperado al cargar la encuesta: " + e.getMessage()));
         }
+    }
+
+    /**
+     * {@code GET  /encuesta/init/encuestas-vigentes} : get all vigentes encuestas ordered from oldest to newest.
+     *
+     * This endpoint is public and is used by the encuesta init flow.
+     */
+    @GetMapping("/init/encuestas-vigentes")
+    public ResponseEntity<List<Encuesta>> getEncuestasVigentesParaInit() {
+        LOG.debug("REST request to get vigentes Encuestas for init");
+        List<Encuesta> encuestas = encuestaService.findVigentesOrderByIdDesc();
+        // El servicio las regresa de más reciente a más antigua, invertimos para dejar de más antigua a más reciente
+        Collections.reverse(encuestas);
+        return ResponseEntity.ok(encuestas);
+    }
+
+    /**
+     * Request body for the first step of encuesta init (buscar encuestado).
+     */
+    public static class EncuestaInitBuscarRequest {
+        private Long encuestaId;
+        private String nombre;
+        private String claveEmpleado;
+
+        public Long getEncuestaId() {
+            return encuestaId;
+        }
+
+        public void setEncuestaId(Long encuestaId) {
+            this.encuestaId = encuestaId;
+        }
+
+        public String getNombre() {
+            return nombre;
+        }
+
+        public void setNombre(String nombre) {
+            this.nombre = nombre;
+        }
+
+        public String getClaveEmpleado() {
+            return claveEmpleado;
+        }
+
+        public void setClaveEmpleado(String claveEmpleado) {
+            this.claveEmpleado = claveEmpleado;
+        }
+
+    }
+
+    /**
+     * Response body for the first step of encuesta init.
+     */
+    public static class EncuestaInitBuscarResponse {
+        private Long encuestaId;
+        private Long encuestadoId;
+        private String campoValidacion; // DIA, MES o ANIO
+
+        public Long getEncuestaId() {
+            return encuestaId;
+        }
+
+        public void setEncuestaId(Long encuestaId) {
+            this.encuestaId = encuestaId;
+        }
+
+        public Long getEncuestadoId() {
+            return encuestadoId;
+        }
+
+        public void setEncuestadoId(Long encuestadoId) {
+            this.encuestadoId = encuestadoId;
+        }
+
+        public String getCampoValidacion() {
+            return campoValidacion;
+        }
+
+        public void setCampoValidacion(String campoValidacion) {
+            this.campoValidacion = campoValidacion;
+        }
+    }
+
+    /**
+     * {@code POST  /encuesta/init/buscar-encuestado} :
+     * Busca al encuestado por nombre y clave de empleado para la encuesta seleccionada
+     * y devuelve el campo de fecha de nacimiento que deberá capturar (día/mes/año).
+     */
+    @PostMapping("/init/buscar-encuestado")
+    public ResponseEntity<?> buscarEncuestadoParaInit(@RequestBody EncuestaInitBuscarRequest request) {
+        LOG.debug("REST request to buscar encuestado for init, encuestaId: {}, nombre: {}, claveEmpleado: {}", request.getEncuestaId(), request.getNombre(), request.getClaveEmpleado());
+
+        if (request.getEncuestaId() == null || request.getNombre() == null || request.getClaveEmpleado() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "Los datos de encuesta, nombre y clave de empleado son obligatorios"));
+        }
+
+        Optional<Encuestado> encuestadoOpt = encuestadoRepository.findByNombreAndClaveEmpleado(
+            request.getNombre(),
+            request.getClaveEmpleado()
+        );
+
+        if (encuestadoOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", "No se encontró un encuestado con el nombre y la clave de empleado proporcionados"));
+        }
+
+        Encuestado encuestado = encuestadoOpt.get();
+
+        if (encuestado.getFechaNacimiento() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "El encuestado no tiene registrada una fecha de nacimiento"));
+        }
+
+        // Seleccionar aleatoriamente qué parte de la fecha se va a solicitar como candado
+        String[] campos = new String[] { "DIA", "MES", "ANIO" };
+        String campoSeleccionado = campos[new Random().nextInt(campos.length)];
+
+        EncuestaInitBuscarResponse response = new EncuestaInitBuscarResponse();
+        response.setEncuestaId(request.getEncuestaId());
+        response.setEncuestadoId(encuestado.getId());
+        response.setCampoValidacion(campoSeleccionado);
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Request body for the validation step of encuesta init.
+     */
+    public static class EncuestaInitValidarRequest {
+        private Long encuestaId;
+        private Long encuestadoId;
+        private String campoValidacion; // DIA, MES o ANIO
+        private String valor; // siempre 2 dígitos
+
+        public Long getEncuestaId() {
+            return encuestaId;
+        }
+
+        public void setEncuestaId(Long encuestaId) {
+            this.encuestaId = encuestaId;
+        }
+
+        public Long getEncuestadoId() {
+            return encuestadoId;
+        }
+
+        public void setEncuestadoId(Long encuestadoId) {
+            this.encuestadoId = encuestadoId;
+        }
+
+        public String getCampoValidacion() {
+            return campoValidacion;
+        }
+
+        public void setCampoValidacion(String campoValidacion) {
+            this.campoValidacion = campoValidacion;
+        }
+
+        public String getValor() {
+            return valor;
+        }
+
+        public void setValor(String valor) {
+            this.valor = valor;
+        }
+    }
+
+    /**
+     * {@code POST  /encuesta/init/validar} :
+     * Valida el dato de la fecha de nacimiento capturado y, si es correcto,
+     * verifica o genera la asociación en AplicacionEncuesta y devuelve el enlace único.
+     *
+     * Si ya existe la asociación y la encuesta ya fue aplicada, devuelve el mismo
+     * mensaje de error que cuando se intenta usar un enlace ya completado.
+     */
+    @PostMapping("/init/validar")
+    public ResponseEntity<?> validarEncuestadoYCrearAplicacion(@RequestBody EncuestaInitValidarRequest request) {
+        LOG.debug(
+            "REST request to validar encuestado for init, encuestaId: {}, encuestadoId: {}, campo: {}, valor: {}",
+            request.getEncuestaId(),
+            request.getEncuestadoId(),
+            request.getCampoValidacion(),
+            request.getValor()
+        );
+
+        if (
+            request.getEncuestaId() == null ||
+            request.getEncuestadoId() == null ||
+            request.getCampoValidacion() == null ||
+            request.getValor() == null
+        ) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "Todos los datos de validación son obligatorios"));
+        }
+
+        Optional<Encuestado> encuestadoOpt = encuestadoRepository.findById(request.getEncuestadoId());
+        if (encuestadoOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("error", "El encuestado especificado no existe"));
+        }
+
+        Encuestado encuestado = encuestadoOpt.get();
+
+        if (encuestado.getFechaNacimiento() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "El encuestado no tiene registrada una fecha de nacimiento"));
+        }
+
+        LocalDate fn = encuestado.getFechaNacimiento();
+        String campo = request.getCampoValidacion().toUpperCase();
+        String esperado;
+        switch (campo) {
+            case "DIA":
+                esperado = String.format("%02d", fn.getDayOfMonth());
+                break;
+            case "MES":
+                esperado = String.format("%02d", fn.getMonthValue());
+                break;
+            case "ANIO":
+                int anio2 = fn.getYear() % 100;
+                esperado = String.format("%02d", anio2);
+                break;
+            default:
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Campo de validación no válido"));
+        }
+
+        String valorCapturado = request.getValor().trim();
+        if (!esperado.equals(valorCapturado)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "El dato capturado de la fecha de nacimiento es incorrecto"));
+        }
+
+        // Dato correcto: revisar o crear la asociación de AplicacionEncuesta
+        AplicacionEncuesta aplicacionEncuesta = aplicacionEncuestaService.crearAplicacionSiNoExiste(
+            request.getEncuestaId(),
+            request.getEncuestadoId()
+        );
+
+        // Si ya estaba aplicada, reutilizamos la lógica de mensaje de encuesta completada
+        if (aplicacionEncuesta.getFechaAplicacion() != null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", "Esta encuesta ya ha sido completada"));
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("enlaceUnico", aplicacionEncuesta.getEnlaceUnico());
+
+        return ResponseEntity.ok(response);
     }
 
     /**

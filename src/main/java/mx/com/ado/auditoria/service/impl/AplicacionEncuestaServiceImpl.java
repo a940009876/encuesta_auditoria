@@ -155,6 +155,42 @@ public class AplicacionEncuestaServiceImpl implements AplicacionEncuestaService 
         return aplicacionEncuestaRepository.findCompletadasByEncuestaId(encuestaId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<AplicacionEncuesta> findByEncuestadoAndEncuesta(Long encuestadoId, Long encuestaId) {
+        LOG.debug("Request to get AplicacionEncuesta by encuestado {} and encuesta {}", encuestadoId, encuestaId);
+        return aplicacionEncuestaRepository.findByEncuestadoAndEncuesta(encuestadoId, encuestaId);
+    }
+
+    @Override
+    @Transactional
+    public AplicacionEncuesta crearAplicacionSiNoExiste(Long encuestaId, Long encuestadoId) {
+        LOG.debug("Request to create AplicacionEncuesta if not exists for encuesta {} and encuestado {}", encuestaId, encuestadoId);
+
+        Optional<AplicacionEncuesta> existenteOpt = aplicacionEncuestaRepository.findByEncuestadoAndEncuesta(encuestadoId, encuestaId);
+        if (existenteOpt.isPresent()) {
+            LOG.debug("AplicacionEncuesta already exists for encuesta {} and encuestado {}", encuestaId, encuestadoId);
+            return existenteOpt.get();
+        }
+
+        Encuesta encuesta = encuestaRepository
+            .findById(encuestaId)
+            .orElseThrow(() -> new IllegalArgumentException("Encuesta no encontrada con id: " + encuestaId));
+
+        Encuestado encuestado = encuestadoRepository
+            .findById(encuestadoId)
+            .orElseThrow(() -> new IllegalArgumentException("Encuestado no encontrado con id: " + encuestadoId));
+
+        AplicacionEncuesta aplicacionEncuesta = new AplicacionEncuesta();
+        aplicacionEncuesta.setEncuesta(encuesta);
+        aplicacionEncuesta.setEncuestado(encuestado);
+        aplicacionEncuesta.setEnlaceUnico(generarCodigoUnico());
+
+        AplicacionEncuesta guardada = aplicacionEncuestaRepository.save(aplicacionEncuesta);
+        LOG.debug("Created AplicacionEncuesta {} for encuesta {} and encuestado {}", guardada.getId(), encuestaId, encuestadoId);
+        return guardada;
+    }
+
     private String generarCodigoUnico() {
         String codigo;
         do {

@@ -80,4 +80,25 @@ public interface AplicacionEncuestaService {
      * @return the list of completed aplicacionEncuestas.
      */
     List<AplicacionEncuesta> findCompletadasByEncuestaId(Long encuestaId);
+
+    /**
+     * Get an AplicacionEncuesta by encuestado and encuesta.
+     *
+     * @param encuestadoId the id of the encuestado.
+     * @param encuestaId the id of the encuesta.
+     * @return the entity, if found.
+     */
+    Optional<AplicacionEncuesta> findByEncuestadoAndEncuesta(Long encuestadoId, Long encuestaId);
+
+    /**
+     * Create an AplicacionEncuesta association between an encuestado and an encuesta
+     * if it does not already exist. If it exists, the existing entity is returned.
+     *
+     * This reuses the same logic used when generating enlaces masivamente.
+     *
+     * @param encuestaId the id of the encuesta.
+     * @param encuestadoId the id of the encuestado.
+     * @return the existing or newly created AplicacionEncuesta.
+     */
+    AplicacionEncuesta crearAplicacionSiNoExiste(Long encuestaId, Long encuestadoId);
 }

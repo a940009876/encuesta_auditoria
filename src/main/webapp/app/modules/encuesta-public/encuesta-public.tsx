@@ -59,8 +59,7 @@ export const EncuestaPublic = () => {
         setEsperandoTexto(null);
       }
     }
-    // eslint-disable-next-line
-  }, [currentQuestionIndex, encuestaData]);
+  }, [currentQuestionIndex, encuestaData, esperandoTexto, encuestaData?.encuesta.preguntas]);
 
   const loadEncuesta = async () => {
     try {
