@@ -10,6 +10,7 @@ import Configuration from './configuration/configuration';
 import Docs from './docs/docs';
 import GenerarEnlaces from './generar-enlaces';
 import ExportarEncuesta from './exportar-encuesta';
+import ImportarEncuestados from './importar-encuestados';
 
 const AdministrationRoutes = () => (
   <div>
@@ -20,6 +21,7 @@ const AdministrationRoutes = () => (
       <Route path="configuration" element={<Configuration />} />
       <Route path="logs" element={<Logs />} />
       <Route path="docs" element={<Docs />} />
+      <Route path="importar-encuestados" element={<ImportarEncuestados />} />
       <Route path="generar-enlaces" element={<GenerarEnlaces />} />
       <Route path="exportar-encuesta" element={<ExportarEncuesta />} />
     </ErrorBoundaryRoutes>

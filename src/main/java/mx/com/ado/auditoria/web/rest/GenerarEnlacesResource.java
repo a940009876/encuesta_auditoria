@@ -1,11 +1,21 @@
 package mx.com.ado.auditoria.web.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.StringWriter;
-import java.util.*;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import mx.com.ado.auditoria.domain.AplicacionEncuesta;
 import mx.com.ado.auditoria.domain.Encuesta;
 import mx.com.ado.auditoria.domain.Encuestado;
+import mx.com.ado.auditoria.repository.EncuestadoRepository;
 import mx.com.ado.auditoria.security.AuthoritiesConstants;
 import mx.com.ado.auditoria.service.AplicacionEncuestaService;
 import mx.com.ado.auditoria.service.EncuestaService;
@@ -18,9 +28,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
- * REST controller for generating enlaces for encuestas.
+ * REST controller for generating enlaces for encuestas and importing encuestados.
  */
 @RestController
 @RequestMapping("/api/admin")
@@ -35,17 +46,22 @@ public class GenerarEnlacesResource {
     private final AplicacionEncuestaService aplicacionEncuestaService;
     private final ObjectMapper objectMapper;
     private final EncryptionService encryptionService;
+    private final EncuestadoRepository encuestadoRepository;
+
+    private static final DateTimeFormatter FECHA_NACIMIENTO_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     public GenerarEnlacesResource(
         EncuestaService encuestaService,
         AplicacionEncuestaService aplicacionEncuestaService,
         ObjectMapper objectMapper,
-        EncryptionService encryptionService
+        EncryptionService encryptionService,
+        EncuestadoRepository encuestadoRepository
     ) {
         this.encuestaService = encuestaService;
         this.aplicacionEncuestaService = aplicacionEncuestaService;
         this.objectMapper = objectMapper;
         this.encryptionService = encryptionService;
+        this.encuestadoRepository = encuestadoRepository;
     }
 
     /**
@@ -215,6 +231,105 @@ public class GenerarEnlacesResource {
         }
     }
 
+    /**
+     * {@code POST /admin/importar-encuestados} : Import encuestados from CSV file.
+     *
+     * CSV structure: Nombre,Clave,Fecha de Nacimiento (dd/MM/yyyy)
+     *
+     * Validation rules:
+     * 1. Each record must contain the 3 fields.
+     * 2. Employee key (Clave) must be unique.
+     * 3. Birth date format must be dd/MM/yyyy.
+     */
+    @PostMapping(value = "/importar-encuestados", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<ImportEncuestadosResult> importarEncuestados(@RequestPart("file") MultipartFile file) {
+        LOG.debug("REST request to import encuestados from CSV");
+
+        ImportEncuestadosResult result = new ImportEncuestadosResult();
+
+        if (file == null || file.isEmpty()) {
+            result.getRegistrosConProblemas()
+                .add(new RegistroConProblema("", "El archivo está vacío o no fue enviado"));
+            return ResponseEntity.badRequest().body(result);
+        }
+
+        try (BufferedReader reader = new BufferedReader(
+            new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+
+            String line;
+            boolean isFirstLine = true;
+
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+
+                // Skip header if present
+                if (isFirstLine) {
+                    String lower = line.toLowerCase();
+                    if (lower.contains("nombre") && lower.contains("clave")) {
+                        isFirstLine = false;
+                        continue;
+                    }
+                    isFirstLine = false;
+                }
+
+                String originalLine = line;
+                String[] parts = line.split(",");
+
+                if (parts.length != 3) {
+                    result.getRegistrosConProblemas()
+                        .add(new RegistroConProblema(originalLine, "Cada registro debe contar con los 3 campos"));
+                    continue;
+                }
+
+                String nombre = parts[0] != null ? parts[0].trim() : "";
+                String clave = parts[1] != null ? parts[1].trim() : "";
+                String fechaStr = parts[2] != null ? parts[2].trim() : "";
+
+                if (nombre.isEmpty() || clave.isEmpty() || fechaStr.isEmpty()) {
+                    result.getRegistrosConProblemas()
+                        .add(new RegistroConProblema(originalLine, "Cada registro debe contar con los 3 campos"));
+                    continue;
+                }
+
+                // Validate unique clave
+                if (encuestadoRepository.existsByClaveEmpleado(clave)) {
+                    result.getRegistrosConProblemas()
+                        .add(new RegistroConProblema(originalLine, "La clave de empleado ya existe"));
+                    continue;
+                }
+
+                // Validate date format
+                LocalDate fechaNacimiento;
+                try {
+                    fechaNacimiento = LocalDate.parse(fechaStr, FECHA_NACIMIENTO_FORMATTER);
+                } catch (DateTimeParseException e) {
+                    result.getRegistrosConProblemas()
+                        .add(new RegistroConProblema(originalLine, "El formato de la fecha de nacimiento es inválido"));
+                    continue;
+                }
+
+                // Persist encuestado
+                Encuestado encuestado = new Encuestado()
+                    .nombre(nombre)
+                    .claveEmpleado(clave)
+                    .fechaNacimiento(fechaNacimiento);
+
+                encuestadoRepository.save(encuestado);
+                result.incrementRegistrosImportados();
+            }
+
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            LOG.error("Error importing encuestados from CSV", e);
+            result.getRegistrosConProblemas()
+                .add(new RegistroConProblema("", "Error al procesar el archivo: " + e.getMessage()));
+            return ResponseEntity.internalServerError().body(result);
+        }
+    }
+
     private String escapeCsv(String value) {
         if (value == null) {
             return "";
@@ -224,6 +339,61 @@ public class GenerarEnlacesResource {
             return "\"" + value.replace("\"", "\"\"") + "\"";
         }
         return value;
+    }
+
+    public static class ImportEncuestadosResult {
+
+        private int registrosImportados;
+        private java.util.List<RegistroConProblema> registrosConProblemas = new java.util.ArrayList<>();
+
+        public int getRegistrosImportados() {
+            return registrosImportados;
+        }
+
+        public void setRegistrosImportados(int registrosImportados) {
+            this.registrosImportados = registrosImportados;
+        }
+
+        public void incrementRegistrosImportados() {
+            this.registrosImportados++;
+        }
+
+        public java.util.List<RegistroConProblema> getRegistrosConProblemas() {
+            return registrosConProblemas;
+        }
+
+        public void setRegistrosConProblemas(java.util.List<RegistroConProblema> registrosConProblemas) {
+            this.registrosConProblemas = registrosConProblemas;
+        }
+    }
+
+    public static class RegistroConProblema {
+
+        private String lineaOriginal;
+        private String motivo;
+
+        public RegistroConProblema() {}
+
+        public RegistroConProblema(String lineaOriginal, String motivo) {
+            this.lineaOriginal = lineaOriginal;
+            this.motivo = motivo;
+        }
+
+        public String getLineaOriginal() {
+            return lineaOriginal;
+        }
+
+        public void setLineaOriginal(String lineaOriginal) {
+            this.lineaOriginal = lineaOriginal;
+        }
+
+        public String getMotivo() {
+            return motivo;
+        }
+
+        public void setMotivo(String motivo) {
+            this.motivo = motivo;
+        }
     }
 }
 

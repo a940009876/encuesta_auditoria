@@ -8,6 +8,9 @@ const adminMenuItems = () => (
     <MenuItem icon="users" to="/admin/user-management">
       Gestión de usuarios
     </MenuItem>
+    <MenuItem icon="file-upload" to="/admin/importar-encuestados">
+      Importar Encuestados
+    </MenuItem>
     <MenuItem icon="share-alt" to="/admin/generar-enlaces">
       Generar Enlaces Encuesta
     </MenuItem>

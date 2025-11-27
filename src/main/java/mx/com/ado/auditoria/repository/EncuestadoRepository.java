@@ -12,4 +12,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface EncuestadoRepository extends JpaRepository<Encuestado, Long> {
     Optional<Encuestado> findByNombreAndClaveEmpleado(String nombre, String claveEmpleado);
+
+    boolean existsByClaveEmpleado(String claveEmpleado);
 }
